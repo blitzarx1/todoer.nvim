@@ -6,6 +6,7 @@ M.opts = {
   open_cmd = "tabnew", -- later: "vsplit", "split", etc.
   rg_args = { "--vimgrep", "--no-heading", "--smart-case", "--hidden", "--glob", "!.git/" },
   buffer_name = "Todoer",
+  keymaps = nil,
 }
 
 function M.setup(opts)

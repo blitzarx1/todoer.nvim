@@ -49,6 +49,7 @@ return {
         - [x] `<CR>` - jump to the TODO location in code. 
         - [x] `q`    - close the TODOs list buffer.
         - [x] `r`    - refresh the TODOs list. 
+        - [x] `p`    - show/hide preview (default: show)
         - [ ] `tn`   - create a new task.
 
 - [ ] Configuration

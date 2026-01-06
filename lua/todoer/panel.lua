@@ -78,7 +78,6 @@ local function render(status_line)
   local header = {
     "Todoer",
     "======",
-    ("Pattern: %s"):format(state.pattern),
     status_line or "",
     "",
   }
@@ -116,20 +115,18 @@ end
 function M.open(args)
   ensure_panel_tab()
 
-  local pat = (args and args ~= "") and args or state.pattern
-  state.pattern = pat
   state._results = {}
 
   render(("Searching in %s …"):format(root.project_root()))
 
-  search.search(pat, function(err, results)
+  search.search(function(err, results)
     if err then
       state._results = {}
       render(err)
       return
     end
     state._results = results
-    render(("%d matches.  (<CR> open, j/k move, r refresh, q close)"):format(#results))
+    render(("%d TODOs found.  (<CR> open, j/k move, r refresh, q close)"):format(#results))
   end)
 end
 

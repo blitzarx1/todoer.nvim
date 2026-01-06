@@ -23,7 +23,6 @@ local function ensure_rg()
   return false
 end
 
-
 local function apply_keymaps()
   local maps = config.opts.keymaps
   if not maps or maps == false then

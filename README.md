@@ -27,22 +27,34 @@ return {
 
 ## Development
 
-### TODO
+### Todoer MVP
 
 - [ ] Command for Neovim to list all TODOs in the current project.
     - [x] Jump to the location of a TODO directly from the list.
     - [ ] Create a task from TODO. And move it accross different statuses.
+
 - [ ] Create a task without a TODO location in code.
+
 - [ ] Everything is rendered in readonly custom buffer with rendered links to files and commands to interact with tasks and navigate projects TODOs.
     - [x] Read only buffer with TODOs list and possibility to jump to code locations.
     - [ ] Possibility to create task from the buffer directly.
+
 - [ ] Keymaps
+
     - Anywhere (user configurable):
         - [x] `<leader>tt` - open TODOs list.
         - [ ] `<leader>tn` - create a new task from selected TODO text or manually.
-    - In `Todoer` buffer (predefined):
+
+    - In `Todoer` buffer (buffer local and predefined):
         - [x] `<CR>` - jump to the TODO location in code. 
+        - [x] `q`    - close the TODOs list buffer.
+        - [x] `r`    - refresh the TODOs list. 
         - [ ] `tn`   - create a new task.
+
+- [ ] Configuration
+    - [x] Keymaps configuration (enable/disable default keymaps).
+    - [ ] Exclude paths
+
 ### Task
 
 - Metadata with:

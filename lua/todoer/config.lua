@@ -1,9 +1,10 @@
 local M = {}
 
+-- TODO:[mvp] add opt to exclude certain paths or filetypes from search
+
 M.opts = {
-  pattern = "TODO:",
   root_markers = { ".git", "go.mod", "package.json" },
-  open_cmd = "tabnew", -- later: "vsplit", "split", etc.
+  open_cmd = "tabnew",
   rg_args = { "--vimgrep", "--no-heading", "--smart-case", "--hidden", "--glob", "!.git/" },
   buffer_name = "Todoer",
   keymaps = nil,

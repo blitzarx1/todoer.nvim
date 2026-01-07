@@ -66,7 +66,7 @@ function M.create_from_item(item, results)
   end
 
   local project = root.project_root()
-  local todo_dir = (config.opts and config.opts.todo_dir) or ".todo"
+  local todo_dir = config.opts.todo_dir
   local todo_root = project .. "/" .. todo_dir
 
   if not ensure_dir(todo_root) then

@@ -50,7 +50,7 @@ return {
         - [x] `q`    - close the TODOs list buffer.
         - [x] `r`    - refresh the TODOs list. 
         - [x] `p`    - show/hide preview (default: show)
-        - [ ] `tn`   - create a new task.
+        - [x] `tn`   - create a new task.
 
 - [ ] Configuration
     - [x] Keymaps configuration (enable/disable default keymaps).
@@ -68,3 +68,7 @@ return {
     - Title is a tag from `TODO:[tag]` mark in code. If no tag provided title is the date of task creation.
     - Text from `TODO:[tag] [multiline text]` mark in code.
 
+- [ ] Stateful tasks
+    - [ ] Mark already created tasks in the TODOs list with their status and priority.
+    - [ ] Do nothing if TODO is already converted to task and user tries to create a task from it again.
+    - [ ] Track task progress based on the TODOs list changes. Updating task description filling ticks where user removed TODO lines from code.

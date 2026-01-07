@@ -63,7 +63,7 @@ end
 
 local function apply_window_opts(pwin)
   vim.api.nvim_set_option_value("wrap", false, { win = pwin })
-  vim.api.nvim_set_option_value("number", false, { win = pwin })
+  vim.api.nvim_set_option_value("number", true, { win = pwin })
   vim.api.nvim_set_option_value("relativenumber", false, { win = pwin })
   vim.api.nvim_set_option_value("signcolumn", "no", { win = pwin })
   vim.api.nvim_set_option_value("cursorline", false, { win = pwin })

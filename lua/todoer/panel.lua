@@ -34,7 +34,7 @@ local function ensure_panel_tab()
   end
 
   state.buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(state.buf, config.opts.buffer_name)
+  vim.api.nvim_buf_set_name(state.buf, config.opts.buffer_name_list)
 
   vim.api.nvim_set_option_value("buftype", "nofile", { buf = state.buf })
   vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = state.buf })

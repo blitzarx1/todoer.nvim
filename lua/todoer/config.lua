@@ -4,7 +4,7 @@ local M = {}
 
 M.opts = {
   root_markers     = { ".git", "go.mod", "package.json" },
-  open_cmd         = "tabnew",
+  open_cmd         = "tabnew", -- command to open the todoer panel (e.g., "tabnew", "vsplit", "split")
   rg_args          = { "--vimgrep", "--no-heading", "--smart-case", "--hidden", "--glob", "!.git/" },
   buffer_name_list = "TodoerList",
   keymaps          = nil,

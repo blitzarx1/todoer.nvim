@@ -4,6 +4,7 @@ local util    = require("todoer.util")
 local search  = require("todoer.search")
 local root    = require("todoer.root")
 local preview = require("todoer.preview")
+local task    = require("todoer.task")
 
 local M = {}
 
@@ -89,6 +90,11 @@ local function ensure_panel_tab()
       refresh_preview()
     end
   end, { buffer = state.buf, silent = true })
+
+  vim.keymap.set("n", "tn", function()
+    local item = get_selected_item()
+    task.create_from_item(item, state._results or {})
+  end, { buffer = state.buf, silent = true, desc = "Todoer: create task" })
 
   vim.keymap.set("n", "<CR>", function()
     local item = get_selected_item()

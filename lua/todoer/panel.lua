@@ -93,7 +93,16 @@ local function ensure_panel_tab()
 
   vim.keymap.set("n", "tn", function()
     local item = get_selected_item()
+    if not item then return end
+
+    -- store selected index (stable across header changes)
+    local row = vim.api.nvim_win_get_cursor(state.win)[1]
+    state.restore_idx = row - (state.header_len or 0)
+
     task.create_from_item(item, state._results or {})
+
+    -- refresh list (async)
+    require("todoer").open("")
   end, { buffer = state.buf, silent = true, desc = "Todoer: create task" })
 
   vim.keymap.set("n", "<CR>", function()
@@ -176,8 +185,37 @@ local function render(status_line)
   if state.win and vim.api.nvim_win_is_valid(state.win) then
     local first_item_row = state.header_len + 1
     if first_item_row <= vim.api.nvim_buf_line_count(state.buf) then
-      vim.api.nvim_win_set_cursor(state.win, { first_item_row, 0 })
-      refresh_preview()
+      if state.win and vim.api.nvim_win_is_valid(state.win) then
+        local header = state.header_len or 0
+        local total = vim.api.nvim_buf_line_count(state.buf)
+        local has_items = #(state._results or {}) > 0
+
+        -- Always keep cursor off the header if there are list lines
+        local min_row = header + 1
+        if min_row > total then
+          return
+        end
+
+        local row = min_row -- default
+
+        -- Only restore selection when we actually have items rendered.
+        if has_items and state.restore_idx and state.restore_idx >= 1 then
+          row = header + state.restore_idx
+        end
+
+        -- Clamp
+        if row < min_row then row = min_row end
+        if row > total then row = total end
+
+        vim.api.nvim_win_set_cursor(state.win, { row, 0 })
+
+        -- IMPORTANT: only clear restore_idx after applying it on real results
+        if has_items then
+          state.restore_idx = nil
+        end
+
+        refresh_preview()
+      end
     end
   end
 end

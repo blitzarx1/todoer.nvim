@@ -1,6 +1,7 @@
-local config = require("todoer.config")
-local root = require("todoer.root")
-local matching = require("todoer.matching")
+local config     = require("todoer.config")
+local root       = require("todoer.root")
+local matching   = require("todoer.matching")
+local task_index = require("todoer.task_index")
 
 local M = {}
 
@@ -81,6 +82,10 @@ function M.search(cb)
 
       local results = parse_rg_vimgrep(res.stdout or "", cwd)
       results = enrich_results(results)
+
+      local idx = task_index.build_index()
+      results = task_index.attach(results, idx)
+
       cb(nil, results)
     end)
   end)

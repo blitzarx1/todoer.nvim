@@ -40,7 +40,6 @@ return {
     - [ ] Possibility to create task from the buffer directly.
 
 - [ ] Keymaps
-
     - Anywhere (user configurable):
         - [x] `<leader>tt` - open TODOs list.
         - [ ] `<leader>tn` - create a new task from selected TODO text or manually.
@@ -55,6 +54,7 @@ return {
 - [ ] Configuration
     - [x] Keymaps configuration (enable/disable default keymaps).
     - [ ] Exclude paths
+    - [ ] Regexp customizations for TODO, tags and description formats
 
 ### Task
 

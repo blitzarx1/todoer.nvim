@@ -69,6 +69,14 @@ return {
     - Text from `TODO:[tag] [multiline text]` mark in code.
 
 - [ ] Stateful tasks
-    - [ ] Mark already created tasks in the TODOs list with their status and priority.
-    - [ ] Do nothing if TODO is already converted to task and user tries to create a task from it again.
+    - [x] Mark already created tasks in the TODOs list with their status and priority.
+    - [x] Do nothing if TODO is already converted to task and user tries to create a task from it again.
     - [ ] Track task progress based on the TODOs list changes. Updating task description filling ticks where user removed TODO lines from code.
+    - [ ] Mark as done bullet items in task when the corresponding TODO is not present in the code anymore. When all bullet items are done the task becomes DONE
+
+- [ ] Supprot FIXME tag
+
+- [ ] Task types
+    - [ ] Story: several todos grouped by the same first-lines or tag
+    - [ ] Task: todo which is not grouped
+    - [ ] Bug: FIXME tag

@@ -8,11 +8,6 @@ local function now_rfc3339_utc()
   return os.date("!%Y-%m-%dT%H:%M:%SZ")
 end
 
-local function now_rfc3339_for_dir()
-  -- safe for folder names
-  return os.date("!%Y-%m-%dT%H-%M-%SZ")
-end
-
 local function sanitize_dirname(s)
   s = tostring(s or "")
   s = s:gsub("%s+", "_")
@@ -39,14 +34,28 @@ local function writefile(path, lines)
   return ok
 end
 
-local function loc_string(it)
-  return ("%s:%d:%d"):format(it.display_path or it.path, it.lnum or 1, it.col or 1)
-end
-
 local function first_line_text(it)
   local first = (it.desc_lines and it.desc_lines[1]) or it.text or ""
   return keys.normalize_text(first)
 end
+
+local function loc_string(it)
+  return ("%s:%d:%d"):format(it.display_path or it.path, it.lnum or 1, it.col or 1)
+end
+
+-- ---------- IDs (explicit + encapsulated) ----------
+
+-- Stable todo identity (does NOT include position)
+local function todo_id(tag, first_line_norm)
+  return keys.todo_key(tag, first_line_norm)
+end
+
+-- Stable per-file group key for counting/refresh
+local function todo_file_key(tid, file)
+  return ("%s|%s"):format(tid, file)
+end
+
+-- ---------- meta ----------
 
 local function parse_meta(meta_lines)
   local meta = {
@@ -101,31 +110,80 @@ local function meta_to_lines(meta)
   return lines
 end
 
-local function parse_description(desc_lines)
+-- ---------- description parsing / formatting ----------
+
+local function extract_loc_suffix(text)
+  -- expects "... (path:line:col)" at end
+  return text:match("%(([^%)]+:%d+:%d+)%)%s*$")
+end
+
+local function strip_loc_suffix(text)
+  -- remove trailing " (path:line:col)" if present
+  return (tostring(text or ""):gsub("%s*%([^%)]+:%d+:%d+%)%s*$", ""))
+end
+
+local function loc_to_file(loc)
+  if not loc then return nil end
+  -- remove trailing :line:col
+  return (loc:gsub(":%d+:%d+$", ""))
+end
+
+local function parse_loc_line_col(loc)
+  if not loc then return nil, nil end
+  local lnum, col = loc:match(":(%d+):(%d+)$")
+  return tonumber(lnum), tonumber(col)
+end
+
+local function parse_description(desc_lines, task_tag)
   local bullets = {}
-  for _, l in ipairs(desc_lines or {}) do
+
+  for idx, l in ipairs(desc_lines or {}) do
     local chk, text = l:match("^%s*%-%s*%[([ xX])%]%s*(.+)$")
     if chk and text and text ~= "" then
+      local loc = extract_loc_suffix(text)
+      local file = loc_to_file(loc)
+
+      local todo_text = keys.normalize_text(strip_loc_suffix(text))
+      local tid = todo_id(task_tag, todo_text)
+
       table.insert(bullets, {
+        line_index = idx,
         raw = l,
         checked = (chk ~= " "),
-        text = text,
+        text = text, -- original (may include loc)
+        todo_text = todo_text,
+        tid = tid,
+        file = file,
+        loc = loc,
       })
     end
   end
+
   return bullets
 end
 
 local function format_bullet(checked, todo_text, loc)
   local mark = checked and "x" or " "
-  return ("- [%s] %s (%s)"):format(mark, keys.normalize_text(todo_text), loc)
+  todo_text = keys.normalize_text(todo_text)
+
+  if checked then
+    -- Completed todos should not show location
+    return ("- [%s] %s"):format(mark, todo_text)
+  end
+
+  if loc and loc ~= "" then
+    return ("- [%s] %s (%s)"):format(mark, todo_text, loc)
+  end
+
+  return ("- [%s] %s"):format(mark, todo_text)
 end
+
+-- ---------- task dir helpers ----------
 
 local function todo_root_dir(project)
   return project .. "/" .. (config.opts.todo_dir or ".todo")
 end
 
--- Find existing task dir by task_key (works for both tagged and untagged)
 local function find_task_dir_by_task_key(todo_root, want_key)
   if vim.fn.isdirectory(todo_root) ~= 1 then return nil end
   local dirs = vim.fn.globpath(todo_root, "*", false, true) or {}
@@ -149,37 +207,23 @@ local function ensure_task_dir(project, tag, first_line_norm)
     return nil, ("[Todoer] Failed to create %s"):format(todo_root)
   end
 
-  -- If task exists by task_key (works even if folder naming changes later)
   local task_key = keys.task_key(tag, first_line_norm)
   local existing = find_task_dir_by_task_key(todo_root, task_key)
   if existing then
     return existing, nil
   end
 
-  -- Otherwise create a new folder.
-  -- Tagged tasks keep tag-based folder.
-  -- Untagged tasks use a slug of the first line (unhashed).
   local folder_name
   if tag and tag ~= "" then
     folder_name = sanitize_dirname(tag)
   else
-    -- Unhashed task id folder name
     folder_name = sanitize_dirname(first_line_norm)
-
-    -- Avoid absurdly long paths
-    if #folder_name > 80 then
-      folder_name = folder_name:sub(1, 80)
-    end
-
-    if folder_name == "" then
-      folder_name = "task"
-    end
+    if #folder_name > 80 then folder_name = folder_name:sub(1, 80) end
+    if folder_name == "" then folder_name = "task" end
   end
 
   local base = todo_root .. "/" .. folder_name
   local task_dir = base
-
-  -- Ensure uniqueness if something already exists
   if vim.fn.isdirectory(task_dir) == 1 then
     for i = 2, 999 do
       local cand = ("%s-%d"):format(base, i)
@@ -196,8 +240,8 @@ local function ensure_task_dir(project, tag, first_line_norm)
   return task_dir, nil
 end
 
---- Create or update task folder + files from one selected item.
---- `results` is current TODO matches list.
+-- ---------- create/update from item ----------
+
 function M.create_from_item(item, results)
   if not item then
     vim.notify("[Todoer] No TODO under cursor.", vim.log.levels.WARN)
@@ -208,6 +252,7 @@ function M.create_from_item(item, results)
 
   local selected_tag = item.tag
   local selected_first = first_line_text(item)
+
   local task_key = keys.task_key(selected_tag, selected_first)
   local id = keys.hash(task_key)
 
@@ -227,7 +272,6 @@ function M.create_from_item(item, results)
 
   local now = now_rfc3339_utc()
 
-  -- Preserve existing status/priority/created if present
   local meta = {
     id = (existing_meta and existing_meta.id) or id,
     task_key = (existing_meta and existing_meta.task_key) or task_key,
@@ -261,7 +305,7 @@ function M.create_from_item(item, results)
     end
   end
 
-  -- Merge locations: keep all unique locations (this is what you want!)
+  -- merge locations (keeps exact last-known locs, useful for jumping)
   local loc_seen = {}
   if existing_meta and existing_meta.locations then
     for _, loc in ipairs(existing_meta.locations) do
@@ -279,51 +323,88 @@ function M.create_from_item(item, results)
     end
   end
 
-  -- Read existing description and preserve checkbox state PER-LOCATION.
-  -- Key = normalized first line + "|" + location
-  local existing_bullets = parse_description(readfile(desc_path) or {})
-  local existing_by_loc_key = {}
+  -- read existing description
+  local existing_desc_lines = readfile(desc_path) or {}
+  local existing_bullets = parse_description(existing_desc_lines, meta.tag)
+
+  -- Count existing instances per (todo_id, file)
+  local existing_count = {}
   for _, b in ipairs(existing_bullets) do
-    local text_norm = keys.normalize_text(b.text)
-    local loc = b.text:match("%(([^%)]+:%d+:%d+)%)%s*$") -- extract location at end
-    if loc then
-      local k = text_norm .. "|" .. loc
-      existing_by_loc_key[k] = b.checked
+    if b.file then
+      local gk = todo_file_key(b.tid, b.file)
+      existing_count[gk] = (existing_count[gk] or 0) + 1
     end
   end
 
-  local header = meta.tag and meta.tag ~= "" and meta.tag or (existing_meta and existing_meta.created) or now
+  -- Build scan occurrences per (todo_id, file)
+  local scan_occ = {}
+  local scan_todo_text = {} -- representative text to print for that group
+  for _, it in ipairs(items) do
+    local todo_text = first_line_text(it)
+    local tid = todo_id(meta.tag, todo_text)
+    local file = it.display_path or it.path
+    local gk = todo_file_key(tid, file)
+
+    scan_occ[gk] = scan_occ[gk] or {}
+    table.insert(scan_occ[gk], loc_string(it))
+
+    scan_todo_text[gk] = scan_todo_text[gk] or todo_text
+  end
+
+  -- sort each group's occurrences by (line, col) for stable bullet additions
+  for gk, occs in pairs(scan_occ) do
+    table.sort(occs, function(a, b)
+      local la, ca = parse_loc_line_col(a)
+      local lb, cb = parse_loc_line_col(b)
+      if (la or 0) ~= (lb or 0) then return (la or 0) < (lb or 0) end
+      return (ca or 0) < (cb or 0)
+    end)
+  end
+
+  -- Header should be unhashed identifier:
+  local header = (meta.tag and meta.tag ~= "" and meta.tag) or selected_first or now
+
   local desc_lines = {
     ("# %s"):format(header),
     "",
   }
 
-  -- Emit bullets for ALL locations (dedupe only by location)
-  local emitted_loc = {}
-
-  -- Keep existing bullets first (so you don't reorder user edits)
-  for _, b in ipairs(existing_bullets) do
-    table.insert(desc_lines, b.raw)
-    local text_norm = keys.normalize_text(b.text)
-    local loc = b.text:match("%(([^%)]+:%d+:%d+)%)%s*$")
-    if loc then emitted_loc[text_norm .. "|" .. loc] = true end
-  end
-
-  -- Add missing bullets from current scan
-  for _, it in ipairs(items) do
-    local first = first_line_text(it)
-    local loc = loc_string(it)
-    local k = first .. "|" .. loc
-    if not emitted_loc[k] then
-      emitted_loc[k] = true
-      local checked = existing_by_loc_key[k] or false
-      table.insert(desc_lines, format_bullet(checked, first, loc))
+  -- Keep existing content except old header
+  for _, l in ipairs(existing_desc_lines) do
+    if not l:match("^%s*#%s+") then
+      table.insert(desc_lines, l)
     end
   end
 
-  table.insert(desc_lines, "")
+  if desc_lines[3] and desc_lines[3] ~= "" then
+    table.insert(desc_lines, 3, "")
+  end
 
-  -- Write files
+  -- Append missing instances based on counts
+  local keys_sorted = {}
+  for gk, _ in pairs(scan_occ) do
+    table.insert(keys_sorted, gk)
+  end
+  table.sort(keys_sorted)
+
+  local appended_any = false
+  for _, gk in ipairs(keys_sorted) do
+    local want = #scan_occ[gk]
+    local have = existing_count[gk] or 0
+    if want > have then
+      for i = have + 1, want do
+        local todo_text = scan_todo_text[gk] or ""
+        local loc = scan_occ[gk][i]
+        table.insert(desc_lines, format_bullet(false, todo_text, loc))
+        appended_any = true
+      end
+    end
+  end
+
+  if appended_any then
+    table.insert(desc_lines, "")
+  end
+
   local ok1 = writefile(meta_path, meta_to_lines(meta))
   local ok2 = writefile(desc_path, desc_lines)
 
@@ -333,6 +414,134 @@ function M.create_from_item(item, results)
   end
 
   vim.notify(("[Todoer] Task updated: %s"):format(task_dir), vim.log.levels.INFO)
+end
+
+-- ---------- sync from scan ----------
+
+--- Sync tasks against latest scan results.
+--- Mechanic:
+--- 1) Completed bullets lose their location.
+--- 2) Open bullets get refreshed locations based on current scan (shift-safe).
+--- 3) For each (todo_id, file), if scan finds N occurrences, keep instances 1..N open.
+---    Any additional instances in description.md get auto-ticked (and location removed).
+--- 4) If all bullets are ticked, set task status to DONE.
+function M.sync_from_scan(results)
+  local project = root.project_root()
+  local todo_root = todo_root_dir(project)
+  if vim.fn.isdirectory(todo_root) ~= 1 then return end
+
+  -- Build scan occurrences (not just counts) per (todo_id, file)
+  local scan_occ = {}
+  for _, it in ipairs(results or {}) do
+    if it then
+      local todo_text = first_line_text(it)
+      local tid = todo_id(it.tag, todo_text)
+      local file = it.display_path or it.path
+      local gk = todo_file_key(tid, file)
+
+      scan_occ[gk] = scan_occ[gk] or {}
+      table.insert(scan_occ[gk], loc_string(it))
+    end
+  end
+
+  -- sort occurrences so instance 1..N maps stably
+  for gk, occs in pairs(scan_occ) do
+    table.sort(occs, function(a, b)
+      local la, ca = parse_loc_line_col(a)
+      local lb, cb = parse_loc_line_col(b)
+      if (la or 0) ~= (lb or 0) then return (la or 0) < (lb or 0) end
+      return (ca or 0) < (cb or 0)
+    end)
+  end
+
+  local dirs = vim.fn.globpath(todo_root, "*", false, true) or {}
+  local now = now_rfc3339_utc()
+
+  for _, dir in ipairs(dirs) do
+    if vim.fn.isdirectory(dir) == 1 then
+      local meta_path = dir .. "/meta"
+      local desc_path = dir .. "/description.md"
+
+      if vim.fn.filereadable(meta_path) == 1 and vim.fn.filereadable(desc_path) == 1 then
+        local meta = parse_meta(readfile(meta_path) or {})
+        local desc_lines = readfile(desc_path) or {}
+
+        local bullets = parse_description(desc_lines, meta.tag)
+
+        -- instance index per (todo_id, file) within THIS task
+        local seen_idx = {}
+
+        local total = 0
+        local done = 0
+        local changed_desc = false
+
+        for _, b in ipairs(bullets) do
+          total = total + 1
+
+          local is_checked = b.checked
+
+          if not b.file then
+            -- no file info -> can't refresh; still enforce "completed has no location"
+            if is_checked then
+              local new_line = format_bullet(true, b.todo_text, nil)
+              if desc_lines[b.line_index] ~= new_line then
+                desc_lines[b.line_index] = new_line
+                changed_desc = true
+              end
+            end
+          else
+            local gk = todo_file_key(b.tid, b.file)
+            seen_idx[gk] = (seen_idx[gk] or 0) + 1
+            local idx = seen_idx[gk]
+
+            local occs = scan_occ[gk] or {}
+            local allowed_open = #occs
+
+            if is_checked then
+              -- Completed: remove location
+              local new_line = format_bullet(true, b.todo_text, nil)
+              if desc_lines[b.line_index] ~= new_line then
+                desc_lines[b.line_index] = new_line
+                changed_desc = true
+              end
+            else
+              if idx > allowed_open then
+                -- This instance no longer exists in code -> auto-check + remove location
+                local new_line = format_bullet(true, b.todo_text, nil)
+                desc_lines[b.line_index] = new_line
+                changed_desc = true
+                is_checked = true
+              else
+                -- Still exists -> refresh location to current scan
+                local new_loc = occs[idx]
+                local new_line = format_bullet(false, b.todo_text, new_loc)
+                if desc_lines[b.line_index] ~= new_line then
+                  desc_lines[b.line_index] = new_line
+                  changed_desc = true
+                end
+              end
+            end
+          end
+
+          if is_checked then done = done + 1 end
+        end
+
+        local meta_changed = false
+        if total > 0 and done == total and meta.status ~= "DONE" then
+          meta.status = "DONE"
+          meta.updated = now
+          meta_changed = true
+        end
+
+        if changed_desc then
+          writefile(desc_path, desc_lines)
+        end
+        if meta_changed then
+          writefile(meta_path, meta_to_lines(meta))
+        end
+      end
+    end
+  end
 end
 
 return M

@@ -2,6 +2,7 @@ local config     = require("todoer.config")
 local root       = require("todoer.root")
 local matching   = require("todoer.matching")
 local task_index = require("todoer.task_index")
+local task       = require("todoer.task")
 
 local M = {}
 
@@ -82,6 +83,11 @@ function M.search(cb)
 
       local results = parse_rg_vimgrep(res.stdout or "", cwd)
       results = enrich_results(results)
+
+      -- NEW: sync tasks with latest scan
+      -- 1) tick bullets whose TODOs no longer exist
+      -- 2) mark task DONE if all bullets are ticked
+      task.sync_from_scan(results)
 
       local idx = task_index.build_index()
       results = task_index.attach(results, idx)

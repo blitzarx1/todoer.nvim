@@ -105,6 +105,24 @@ local function ensure_panel_tab()
     require("todoer").open("")
   end, { buffer = state.buf, silent = true, desc = "Todoer: create task" })
 
+  vim.keymap.set("n", "to", function()
+    local item = get_selected_item()
+    if not item then return end
+    if not item.task_dir or item.task_dir == "" then
+      vim.notify("[Todoer] No task found for this TODO. Create it with `tn` first.", vim.log.levels.WARN)
+      return
+    end
+
+    local desc = item.task_dir .. "/description.md"
+    if vim.fn.filereadable(desc) ~= 1 then
+      vim.notify(("[Todoer] Task description not found: %s"):format(desc), vim.log.levels.ERROR)
+      return
+    end
+
+    -- Open in a new buffer (tab), so the list stays available
+    vim.cmd("tabnew " .. vim.fn.fnameescape(desc))
+  end, { buffer = state.buf, silent = true, desc = "Todoer: open task description" })
+
   vim.keymap.set("n", "<CR>", function()
     local item = get_selected_item()
     if not item then return end
@@ -233,7 +251,7 @@ function M.open(_)
       return
     end
     state._results = results
-    render(("%d TODOs found.  (<CR> open, j/k move, p preview, r refresh, q close)"):format(#results))
+    render(("%d TODOs found.  (<CR> open, to task, tn create task, j/k move, p preview, r refresh, q close)"):format(#results))
   end)
 end
 

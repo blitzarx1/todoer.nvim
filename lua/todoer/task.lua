@@ -207,12 +207,14 @@ local function ensure_task_dir(project, tag, first_line_norm)
     return nil, ("[Todoer] Failed to create %s"):format(todo_root)
   end
 
+  -- If this exact task already exists (by task_key), reuse it
   local task_key = keys.task_key(tag, first_line_norm)
   local existing = find_task_dir_by_task_key(todo_root, task_key)
   if existing then
     return existing, nil
   end
 
+  -- Otherwise, compute the folder name (tag or unhashed first line)
   local folder_name
   if tag and tag ~= "" then
     folder_name = sanitize_dirname(tag)
@@ -222,21 +224,22 @@ local function ensure_task_dir(project, tag, first_line_norm)
     if folder_name == "" then folder_name = "task" end
   end
 
-  local base = todo_root .. "/" .. folder_name
-  local task_dir = base
+  local task_dir = todo_root .. "/" .. folder_name
+
+  -- NEW BEHAVIOR:
+  -- If the folder name already exists but it's not the same task_key,
+  -- do NOT create "-2". Error out to make the collision explicit.
   if vim.fn.isdirectory(task_dir) == 1 then
-    for i = 2, 999 do
-      local cand = ("%s-%d"):format(base, i)
-      if vim.fn.isdirectory(cand) ~= 1 then
-        task_dir = cand
-        break
-      end
-    end
+    return nil, ("[Todoer] Task folder name collision: %s already exists, but no task with task_key=%s was found. Please rename/remove the folder or adjust the TODO id/tag."):format(
+      task_dir,
+      task_key
+    )
   end
 
   if not ensure_dir(task_dir) then
     return nil, ("[Todoer] Failed to create task dir: %s"):format(task_dir)
   end
+
   return task_dir, nil
 end
 
@@ -430,7 +433,7 @@ function M.sync_from_scan(results)
   local todo_root = todo_root_dir(project)
   if vim.fn.isdirectory(todo_root) ~= 1 then return end
 
-  -- Build scan occurrences (not just counts) per (todo_id, file)
+  -- Build scan occurrences per (todo_id, file)
   local scan_occ = {}
   for _, it in ipairs(results or {}) do
     if it then
@@ -481,7 +484,6 @@ function M.sync_from_scan(results)
           local is_checked = b.checked
 
           if not b.file then
-            -- no file info -> can't refresh; still enforce "completed has no location"
             if is_checked then
               local new_line = format_bullet(true, b.todo_text, nil)
               if desc_lines[b.line_index] ~= new_line then
@@ -498,7 +500,6 @@ function M.sync_from_scan(results)
             local allowed_open = #occs
 
             if is_checked then
-              -- Completed: remove location
               local new_line = format_bullet(true, b.todo_text, nil)
               if desc_lines[b.line_index] ~= new_line then
                 desc_lines[b.line_index] = new_line
@@ -506,13 +507,11 @@ function M.sync_from_scan(results)
               end
             else
               if idx > allowed_open then
-                -- This instance no longer exists in code -> auto-check + remove location
                 local new_line = format_bullet(true, b.todo_text, nil)
                 desc_lines[b.line_index] = new_line
                 changed_desc = true
                 is_checked = true
               else
-                -- Still exists -> refresh location to current scan
                 local new_loc = occs[idx]
                 local new_line = format_bullet(false, b.todo_text, new_loc)
                 if desc_lines[b.line_index] ~= new_line then

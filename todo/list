@@ -1,0 +1,10 @@
+// TODO:[custom_task] mark todo items
+// TODO:[custom_task] create task from marker todo items
+
+// TODO:[task_types] task could be TASK, BUG, STORY
+// TODO:[task_types] parse FIXME and create task of type BUG
+// TODO:[task_types] if task has more than 1 todo items it becomes STORY
+// TODO:[task_types] decide on task type with TODO and FIXME combines (has the same tag) (mabe LIFE_STORY xD ?)
+
+// FIXME:[multiline_desc] if several TODOs in code comes all one by one. the upper todos are parsed as multiline though they are one line todos 
+// TODO:[multiline_desc] remove mark of multiline description from the todo list. just do elipsis when desc is more than some N and it does not matter if is multiline or not
